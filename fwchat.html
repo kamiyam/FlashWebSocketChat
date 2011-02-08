@@ -1,0 +1,224 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ja" xml:lang="ja">
+	<head>
+		<title>WebSocketFlashChatClient</title>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <link type="text/css" href="style/common.css" rel="stylesheet" />
+        <style type="text/css">
+        #flashContent
+		{
+            width: 800px;
+            margin-right: auto;
+            margin-left: auto;
+			text-align:center;
+		}
+        </style>
+	</head>
+	<body>
+    <div id="content">
+    <fieldset>
+      <legend>&nbsp;Informetion&nbsp;</legend>
+        <div><p>state:&nbsp;<span id="connectstate">-</span></p>
+        <p>online:&nbsp;<span id="online">0</span></p></div>
+    </fieldset>
+		<div id="flashContent">
+<object classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000" width="750" height="500" align="middle">
+				<param name="movie" value="chat.swf" />
+				<param name="quality" value="high" />
+				<param name="bgcolor" value="#ffffff" />
+				<param name="play" value="true" />
+				<param name="loop" value="true" />
+				<param name="wmode" value="window" />
+				<param name="scale" value="showall" />
+				<param name="menu" value="true" />
+				<param name="devicefont" value="false" />
+				<param name="salign" value="T" />
+				<param name="allowScriptAccess" value="sameDomain" />
+				<!--[if !IE]>-->
+				<object type="application/x-shockwave-flash" id="chat" data="fwchat.swf" width="750" height="500">
+					<param name="src" value="fwchat.swf" />
+					<param name="movie" value="fwchat.swf" />
+					<param name="quality" value="high" />
+					<param name="bgcolor" value="#ffffff" />
+					<param name="play" value="true" />
+					<param name="loop" value="true" />
+					<param name="wmode" value="window" />
+					<param name="scale" value="showall" />
+					<param name="menu" value="true" />
+					<param name="devicefont" value="false" />
+					<param name="salign" value="T" />
+					<param name="allowScriptAccess" value="sameDomain" />
+<embed name="chat" src="fwchat.swf" movie="fwchat.swf" width="750" height="500" quality="high"
+ bgcolor="#ffffff" play="true" loop="true" wmode="window" align="middle"
+  scale="showall" menu="true" devicefont="false" salign="T"
+   allowScriptAccess="sameDomain" />
+				<!--<![endif]-->
+					<a href="http://www.adobe.com/go/getflash">
+						<img src="http://www.adobe.com/images/shared/download_buttons/get_flash_player.gif" alt="Adobe Flash Player を取得" />
+					</a>
+				<!--[if !IE]>-->
+				</object>
+				<!--<![endif]-->
+			</object>
+		</div>
+    </div>
+<!-- script -->
+<script type="text/javascript" src="http://www.google.com/jsapi"></script>
+<script type="text/javascript">google.load("jquery", '1.4.2');</script>
+<script type="text/javascript" src="http://api.re-d.net/js/ws/SyncWebSocketDelegate.js"></script>
+<script type="text/javascript">
+///////////////////////
+//global( for flash )
+///////////////////////
+
+//Flashオブジェクト
+var swf;
+
+//AS→JSのためのインターフェイス
+function send( name, msg )
+{
+    sendMessage( name, msg );
+}
+
+//JS→ASのためのインターフェイス
+function display( name, msg )
+{
+	//swfファイル読み込み待ち
+	var i = 0;
+	var timer = setInterval( function()
+	{
+		//swfファイルのactionscript内関数を呼び出すためのオブジェクト
+		swf = swf || swfName( "chat" );
+		if ( swf != null )
+		{
+			try
+			{
+			  //AS disp関数呼び出し
+			  swf.disp( name, msg );
+			}
+			catch(e)
+			{
+				if ( i++ < 100 )  return;
+			}
+			clearInterval( timer );	
+		}
+	  }, 100 );
+}
+
+//ブラウザに対応した呼び出し方のための関数
+function swfName( str )
+{
+	if ( navigator.appName.indexOf("Microsoft") != -1 )
+	{
+		return window[str];
+	}
+	else
+	{
+		return document[str];
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+//document.ready内の関数定義がASから呼ぶと使えないためすべてgloval領域に定義する
+/////////////////////////////////////////////////////////////////////////////////////
+<!--$(document).ready(function( $ ){-->
+	
+	//////////////////
+	// websocket
+	//////////////////
+	var websocket = SyncWebSocketDelegate( "example.com", true );
+
+    //when open
+	websocket.setOpenFunction( function()
+		{
+			$( "#send" ).click( sendMessage );
+			$( "#connectstate" ).html( "connected" );
+		});
+	
+	//接続先よりメッセージを受信した時に，空文字でなければ画面に表示する
+	websocket.setMessageFunction( function ( event )
+		{
+			var result = JSON.parse( event.data );
+			var responseJson = JSON.parse( result.responseJson );
+			
+			if ( result.command === "info" )
+			{
+				dispInformetion( responseJson );
+			}
+			else if (  result.command === "chat" )
+			{
+				dispMessage( responseJson );
+			}
+		});
+
+    //when close
+	websocket.setCloseFunction( function()
+		{
+			$.event.remove( $( "#send" ), "click", sendMessage );
+			$( "#connectstate" ).html( "disconnected" );
+		});
+
+
+	//メッセージ入力欄が空白でなければメッセージを送信する
+	function sendMessage( name, message )
+	{
+		if ( message === "" ) 
+		{
+			return;
+		}
+		
+		if ( name == null || name == "" ) name = "Anonymous";
+		
+		var requestJson = JSON.stringify({
+								"name": name,
+								"message": message
+							});
+		
+		var json = {
+			"command": "chat",
+			"requestJson" : requestJson
+		}
+		websocket.send( JSON.stringify( json ) );
+		$( "#message" ).val( "" );
+	}
+
+	//画面にメッセージを表示する
+	//上に表示されるメッセージが最新となる
+	function dispMessage( responseJson )
+	{    
+		var message = responseJson.message;
+		if ( message == "" )
+		{
+			return;
+		}
+		
+		var name = responseJson.name;
+		if ( name == null || name == "" ) name = "Anonymous";
+	
+		var date = responseJson.date;
+		var msg = "[" + date + "] " + name + "&nbsp;&gt;&nbsp;" + message;
+		
+	    
+		//flash連携
+		display( name, msg );
+
+	}
+	
+	//画面にインフォメーションを表示する
+	function dispInformetion( responseJson )
+	{
+		$( "#online" )
+		.hide()
+		.css({
+			"opacity": 0.0
+		})
+		.html( responseJson.connectNum )
+		.show()
+		.animate({
+			"opacity": 1.0
+		}, 100 );
+	}
+<!--});-->
+</script>
+	</body>
+</html>
